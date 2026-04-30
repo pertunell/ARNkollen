@@ -73,15 +73,19 @@ useEffect(() => {
   useEffect(() => {
     if (!index || query.length < 2) { setHits([]); return; }
     const q = query.toLowerCase();
+    const exact = [];
     const starts = [];
+    const wordStarts = [];
     const contains = [];
     for (let i = 0; i < index.length; i++) {
       const n = index[i][1].toLowerCase();
-      if (n.startsWith(q)) starts.push(index[i]);
+      if (n === q) exact.push(index[i]);
+      else if (n.startsWith(q)) starts.push(index[i]);
+      else if (n.split(/\s+/).some(w => w.startsWith(q))) wordStarts.push(index[i]);
       else if (n.includes(q)) contains.push(index[i]);
-      if (starts.length + contains.length >= 100) break;
+      if (exact.length + starts.length + wordStarts.length + contains.length >= 200) break;
     }
-    const results = [...starts, ...contains].slice(0, 20);
+    const results = [...exact, ...starts, ...wordStarts, ...contains].slice(0, 20);
     setHits(results);
     if (results.length === 1) selectBolag(results[0]);
   }, [query, index]);
