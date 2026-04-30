@@ -63,14 +63,11 @@ export default function App() {
   const [detailError, setDetailError] = useState(null);
   const inputRef = useRef(null);
 
-  useEffect(() => {
-    fetch("/bolag_index.json")
-      .then((r) => {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
-      })
-      .then((data) => setIndex(data))
-      .catch((e) => setLoadError(e.message));
+useEffect(() => {
+    const files = Array.from({length: 9}, (_, i) => `/bolag_${i}.json`);
+    Promise.all(files.map(f => fetch(f).then(r => r.json())))
+      .then(chunks => setIndex(chunks.flat()))
+      .catch(e => setLoadError(e.message));
   }, []);
 
   useEffect(() => {
