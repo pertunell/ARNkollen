@@ -254,12 +254,12 @@ function DetailCard({ bolag, data }) {
         </span>
       </div>
 
-      <div className="detail-grid">
+    <div className="detail-grid">
         <Cell label="Bolagsform" value={form} />
         <Cell label="Säte" value={city} />
         <Cell label="Registrerad" value={regdatum} />
         <Cell label="Adress" value={`${street}, ${zip} ${city}`} />
-        {sni && <Cell label="SNI-kod" value={`${sni.kod} – ${sni.beskrivning ?? ""}`} span />}
+        {sniText && <Cell label="Bransch (SNI)" value={sniText} span />}
         {verksamhet && <Cell label="Verksamhet" value={verksamhet} span />}
       </div>
 
