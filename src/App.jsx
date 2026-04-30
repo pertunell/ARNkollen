@@ -405,7 +405,7 @@ function DetailCard({ bolag, data }) {
   const street = post?.utdelningsadress ?? "—";
   const zip = post?.postnummer ?? "—";
   const sniArr = data?.naringsgrenOrganisation?.sni;
-  const sniText = Array.isArray(sniArr) ? sniArr.map(s => s.klartext).join(", ") : sniArr ?? null;
+  const sniText = Array.isArray(sniArr) ? sniArr.map(s => `${s.kod} – ${s.klartext}`).join(", ") : sniArr ?? null;
   const verksamhet = data?.verksamhetsbeskrivning?.beskrivning ?? null;
   const isActive = data?.verksamOrganisation?.kod === "JA";
   const form = data?.organisationsform?.klartext ?? "Aktiebolag";
