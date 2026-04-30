@@ -121,13 +121,12 @@ export default function App() {
       .catch(e => setLoadError(e.message));
   }, []);
 
-  // Filtered SNI suggestions
-  const sniSuggestions = sniQuery.length > 0
+const sniSuggestions = sniQuery.length > 0
     ? SNI_LIST.filter(([kod, namn]) =>
         namn.toLowerCase().includes(sniQuery.toLowerCase()) ||
         kod.startsWith(sniQuery)
-      ).slice(0, 8)
-    : SNI_LIST.slice(0, 8);
+      )
+    : SNI_LIST;
 
   // Dropdown hits (max 20) — only when no SNI filter (SNI needs Enter for perf)
   useEffect(() => {
