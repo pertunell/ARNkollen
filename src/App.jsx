@@ -83,7 +83,7 @@ useEffect(() => {
       else if (n.startsWith(q)) starts.push(index[i]);
       else if (n.split(/\s+/).some(w => w.startsWith(q))) wordStarts.push(index[i]);
       else if (n.includes(q)) contains.push(index[i]);
-      if (exact.length + starts.length + wordStarts.length + contains.length >= 200) break;
+     if (contains.length >= 500) break;
     }
     const sortByName = (a, b) => a[1].localeCompare(b[1], 'sv');
     const results = [
