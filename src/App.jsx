@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
-const BV_TOKEN_URL = "https://gw.api.bolagsverket.se/auth/realms/prod/protocol/openid-connect/token";
-const BV_API_URL = "https://gw.api.bolagsverket.se/vardefulladatamangder/v1/organisationer/";
+const BV_TOKEN_URL = "/api/token";
+const BV_API_URL = "/api/bolag/";
 const CLIENT_ID = "lIclSqtjDit_jSjl5c7RtongaFIa";
 const CLIENT_SECRET = "3n22pRi80yVBTqnYzqp_6fc0CfYa";
 
@@ -28,11 +28,12 @@ async function getToken() {
 
 async function fetchBolag(orgnr) {
   const token = await getToken();
-  const res = await fetch(BV_API_URL + orgnr, {
+  const res = await fetch("/api/bolag/" + orgnr, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error("API-fel: " + res.status);
-  return res.json();
+  const data = await res.json();
+  return data?.organisationer?.[0] ?? data;
 }
 
 function fmtOrgnr(s) {
@@ -225,17 +226,20 @@ export default function App() {
 }
 
 function DetailCard({ bolag, data }) {
-  const namn = data?.namn?.nyaSe?.[0]?.namn ?? bolag[1];
+  const namn = data?.organisationsnamn?.organisationsnamnLista?.[0]?.namn ?? bolag[1];
   const orgnr = fmtOrgnr(bolag[0]);
-  const regdatum = data?.registreringsdatum ?? bolag[3] ?? "—";
-  const adress = data?.besoksadress ?? data?.postadress ?? null;
-  const city = adress?.postort ?? bolag[2] ?? "—";
-  const street = adress?.adress ?? "—";
-  const zip = adress?.postnummer ?? "—";
-  const sni = data?.sniKoder?.[0] ?? null;
-  const verksamhet = data?.verksamhetsbeskrivning ?? null;
-  const isActive = !data?.avregistreringsdatum;
-  const form = data?.juridiskForm?.beskrivning ?? "Aktiebolag";
+  const regdatum = data?.organisationsdatum?.registreringsdatum ?? bolag[3] ?? "—";
+  const post = data?.postadressOrganisation?.postadress ?? null;
+  const city = post?.postort ?? bolag[2] ?? "—";
+  const street = post?.utdelningsadress ?? "—";
+  const zip = post?.postnummer ?? "—";
+  const sniArr = data?.naringsgrenOrganisation?.sni;
+  const sniText = Array.isArray(sniArr) ? sniArr.map(s => s.klartext).join(', ') : sniArr ?? null;
+  const verksamhet = data?.verksamhetsbeskrivning?.beskrivning ?? null;
+  const isActive = data?.verksamOrganisation?.kod === "JA";
+  const form = data?.organisationsform?.klartext ?? "Aktiebolag";
+  const konkurs = data?.pagaendeAvvecklingsEllerOmstruktureringsforfarande
+    ?.pagaendeAvvecklingsEllerOmstruktureringsforfarandeLista?.[0]?.klartext ?? null;
 
   return (
     <div className="detail-card">
