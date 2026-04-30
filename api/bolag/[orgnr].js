@@ -2,7 +2,7 @@
 export default async function handler(req, res) {
   const { orgnr } = req.query
   const token = req.headers.authorization
-  const r = await fetch('https://gw.api.bolagsverket.se/vardefulladatamangder/v1/organisationer', {
+  const r = await fetch('https://gw.api.bolagsverket.se/vardefulla-datamangder/v1/organisationer', {
     method: 'POST',
     headers: { 
       Authorization: token,
