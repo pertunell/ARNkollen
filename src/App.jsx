@@ -85,7 +85,13 @@ useEffect(() => {
       else if (n.includes(q)) contains.push(index[i]);
       if (exact.length + starts.length + wordStarts.length + contains.length >= 200) break;
     }
-    const results = [...exact, ...starts, ...wordStarts, ...contains].slice(0, 20);
+    const sortByName = (a, b) => a[1].localeCompare(b[1], 'sv');
+    const results = [
+      ...exact.sort(sortByName),
+      ...starts.sort(sortByName),
+      ...wordStarts.sort(sortByName),
+      ...contains.sort(sortByName)
+    ].slice(0, 20);
     setHits(results);
     if (results.length === 1) selectBolag(results[0]);
   }, [query, index]);
