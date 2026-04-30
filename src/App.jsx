@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
-const BV_TOKEN_URL = "/api/token";
-const BV_API_URL = "/api/bolag/";
+const BV_TOKEN_URL = "https://gw.api.bolagsverket.se/auth/realms/prod/protocol/openid-connect/token";
+const BV_API_URL = "https://gw.api.bolagsverket.se/vardefulladatamangder/v1/organisationer/";
 const CLIENT_ID = "lIclSqtjDit_jSjl5c7RtongaFIa";
 const CLIENT_SECRET = "3n22pRi80yVBTqnYzqp_6fc0CfYa";
 
