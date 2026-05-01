@@ -148,8 +148,9 @@ export default function App() {
     if (!index || fullResults !== null) return;
     if (query.length < 2 && !cityQuery) { setHits([]); return; }
     if (selectedSni) { setHits([]); return; }
-    setHits(searchIndex(index, query, cityQuery, "", inkluderaAvregistrerade).slice(0, 20));
-  }, [query, cityQuery, selectedSni, index, fullResults, inkluderaAvregistrerade]);
+    const results = searchIndex(index, query, cityQuery, "", false).slice(0, 20);
+    setHits(results);
+  }, [query, cityQuery, selectedSni, index, fullResults]);
 
   const runFullSearch = useCallback(() => {
     if (!index) return;
