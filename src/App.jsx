@@ -3,38 +3,36 @@ import { useState, useEffect, useRef, useCallback } from "react";
 const BV_TOKEN_URL = "/api/token";
 const BV_API_URL = "/api/bolag/";
 
-// SNI branch list (top-level codes)
 const SNI_LIST = [
   ["01","Jordbruk och jakt"],["02","Skogsbruk"],["03","Fiske och vattenbruk"],
   ["10","Livsmedelsframställning"],["11","Dryckesvaruframställning"],
-  ["13","Textilvarutillverkning"],["14","Tillverkning av kläder"],
-  ["16","Trävaru- och korktillverkning"],["18","Grafisk produktion"],
-  ["20","Tillverkning av kemikalier"],["22","Gummi- och plastvarutillverkning"],
-  ["25","Metallvarutillverkning"],["26","Tillverkning av datorer och elektronik"],
-  ["27","Tillverkning av elapparatur"],["28","Tillverkning av maskiner"],
+  ["14","Tillverkning av kläder"],["18","Grafisk produktion"],
+  ["25","Metallvarutillverkning"],["26","Tillverkning av elektronik"],
   ["29","Tillverkning av motorfordon"],["33","Reparation av maskiner"],
   ["35","Energiförsörjning"],["38","Avfallshantering"],
   ["41","Byggande av hus"],["42","Anläggningsarbeten"],
-  ["43","Specialiserad bygg- och anläggningsverksamhet"],
-  ["45","Handel med motorfordon"],["46","Parti- och provisionshandel"],
-  ["47","Detaljhandel"],["49","Landtransport"],["52","Magasinering och transport"],
-  ["53","Post- och kurirverksamhet"],["55","Hotell och liknande"],
-  ["56","Restauranger och caféer"],["58","Förlagsverksamhet"],
-  ["61","Telekommunikation"],["62","Dataprogrammering och IT"],
-  ["63","Informationstjänster"],["64","Banker och finansiering"],
-  ["65","Försäkring"],["68","Fastighetsverksamhet"],
-  ["69","Juridisk verksamhet"],["70","Företagsledning och konsulttjänster"],
-  ["71","Arkitekter och tekniska konsulter"],["72","Forskning och utveckling"],
-  ["73","Reklam och marknadsföring"],["75","Veterinärverksamhet"],
-  ["77","Uthyrning"],["78","Arbetsförmedling och bemanning"],
-  ["79","Resebyråer"],["80","Säkerhetsverksamhet"],
-  ["81","Fastighetsservice och städning"],["85","Utbildning"],
-  ["86","Hälso- och sjukvård"],["87","Vård och omsorg med boende"],
-  ["88","Sociala insatser utan boende"],["90","Kultur och nöje"],
-  ["93","Sport och friluftsliv"],["95","Reparation av datorer och hushållsartiklar"],
-  ["96","Andra konsumenttjänster"],
+  ["43","Bygg & installation"],["45","Handel med motorfordon"],
+  ["46","Partihandel"],["47","Detaljhandel"],
+  ["49","Landtransport & åkeri"],["52","Lager & logistik"],
+  ["53","Post & kurir"],["55","Hotell & logi"],
+  ["56","Restaurang & café"],["58","Förlag & media"],
+  ["59","Film & musik"],["61","Telekommunikation"],
+  ["62","IT & systemutveckling"],["63","Informationstjänster"],
+  ["64","Bank & finans"],["65","Försäkring"],
+  ["66","Övrig finansverksamhet"],["68","Fastighet"],
+  ["69","Juridik & redovisning"],["70","Konsult & företagsledning"],
+  ["71","Arkitekter & tekniska konsulter"],["72","Forskning & utveckling"],
+  ["73","Reklam & marknadsföring"],["74","Annan specialisttjänst"],
+  ["77","Uthyrning"],["78","Bemanning & rekrytering"],
+  ["79","Resebyråer & turism"],["80","Säkerhet & bevakning"],
+  ["81","Städ & fastighetsskötsel"],["85","Utbildning"],
+  ["86","Hälso- & sjukvård"],["87","Vård med boende"],
+  ["88","Sociala tjänster"],["90","Kultur & nöje"],
+  ["93","Sport & fritid"],["95","Reparation"],
+  ["96","Övriga konsumenttjänster"],
 ];
 
+// ── API helpers ──────────────────────────────────────────────────────────────
 let cachedToken = null;
 let tokenExpiry = 0;
 
@@ -58,6 +56,7 @@ async function fetchBolag(orgnr) {
   return data?.organisationer?.[0] ?? data;
 }
 
+// ── Utilities ────────────────────────────────────────────────────────────────
 function fmtOrgnr(s) {
   const d = s.replace(/\D/g, "");
   if (d.length === 10) return `${d.slice(0, 6)}-${d.slice(6)}`;
@@ -68,7 +67,10 @@ function initials(name) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
 }
 
-function searchIndex(index, q, cityQ) {
+// ── Search ───────────────────────────────────────────────────────────────────
+// index row: [orgnr, namn, city, regdatum, sni5]
+// sniKod: 2-digit prefix to filter on, e.g. "56" for restaurang
+function searchIndex(index, q, cityQ, sniKod) {
   const ql = q.toLowerCase().trim();
   const cl = cityQ.toLowerCase().trim();
   const exact = [], starts = [], wordStarts = [], contains = [];
@@ -78,12 +80,27 @@ function searchIndex(index, q, cityQ) {
     const row = index[i];
     const n = row[1].toLowerCase();
     const c = (row[2] ?? "").toLowerCase();
+    const sni = row[4] ?? "";
+
+    // Apply filters
     if (cl && !c.includes(cl)) continue;
-    if (!ql) { contains.push(row); if (++containsCount >= 500) break; continue; }
+    if (sniKod && !sni.startsWith(sniKod)) continue;
+
+    // No name query — just collect (city/SNI filter already applied)
+    if (!ql) {
+      contains.push(row);
+      if (++containsCount >= 500) break;
+      continue;
+    }
+
+    // Relevance buckets
     if (n === ql) exact.push(row);
     else if (n.startsWith(ql)) starts.push(row);
     else if (n.split(/\s+/).some(w => w.startsWith(ql))) wordStarts.push(row);
-    else if (n.includes(ql)) { contains.push(row); if (++containsCount >= 500) break; }
+    else if (n.includes(ql)) {
+      contains.push(row);
+      if (++containsCount >= 500) break;
+    }
   }
 
   const sortByName = (a, b) => a[1].localeCompare(b[1], "sv");
@@ -95,25 +112,27 @@ function searchIndex(index, q, cityQ) {
   ];
 }
 
+// ── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
   const [index, setIndex] = useState(null);
   const [loadError, setLoadError] = useState(null);
 
-  // Search state
   const [query, setQuery] = useState("");
   const [cityQuery, setCityQuery] = useState("");
-  const [sniQuery, setSniQuery] = useState(""); // text typed in SNI field
+  const [sniQuery, setSniQuery] = useState("");
   const [selectedSni, setSelectedSni] = useState(null); // { kod, namn }
   const [sniDropdown, setSniDropdown] = useState(false);
 
-  const [hits, setHits] = useState([]);
-  const [fullResults, setFullResults] = useState(null);
+  const [hits, setHits] = useState([]);           // dropdown (max 20)
+  const [fullResults, setFullResults] = useState(null); // full list after Enter/Sök
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState(null);
+
   const inputRef = useRef(null);
 
+  // Load 9 index files in parallel
   useEffect(() => {
     const files = Array.from({ length: 9 }, (_, i) => `/bolag_${i}.json`);
     Promise.all(files.map(f => fetch(f).then(r => r.json())))
@@ -121,36 +140,34 @@ export default function App() {
       .catch(e => setLoadError(e.message));
   }, []);
 
-const sniSuggestions = sniQuery.length > 0
+  // SNI dropdown suggestions
+  const sniSuggestions = sniQuery.length > 0
     ? SNI_LIST.filter(([kod, namn]) =>
-        namn.toLowerCase().includes(sniQuery.toLowerCase()) ||
-        kod.startsWith(sniQuery)
+        namn.toLowerCase().includes(sniQuery.toLowerCase()) || kod.startsWith(sniQuery)
       )
     : SNI_LIST;
 
-  // Dropdown hits (max 20) — only when no SNI filter (SNI needs Enter for perf)
+  // Dropdown hits — live while typing name (no SNI filter in dropdown mode for perf)
   useEffect(() => {
     if (!index || fullResults !== null) return;
-    if (query.length < 2 && !selectedSni && !cityQuery) { setHits([]); return; }
-    if (selectedSni) { setHits([]); return; } // SNI = always full results
-    setHits(searchIndex(index, query, cityQuery).slice(0, 20));
+    if (query.length < 2 && !cityQuery) { setHits([]); return; }
+    if (selectedSni) { setHits([]); return; } // SNI always requires full search
+    setHits(searchIndex(index, query, cityQuery, "").slice(0, 20));
   }, [query, cityQuery, selectedSni, index, fullResults]);
 
+  // Full search — triggered by Enter or Sök button
   const runFullSearch = useCallback(() => {
     if (!index) return;
-    const baseResults = searchIndex(index, query, cityQuery);
-    if (selectedSni) {
-      // Can't filter by SNI in bulk file (not stored), show all and note
-      setFullResults(baseResults);
-    } else {
-      setFullResults(baseResults);
-    }
+    const sniKod = selectedSni?.kod ?? "";
+    setFullResults(searchIndex(index, query, cityQuery, sniKod));
     setHits([]);
   }, [index, query, cityQuery, selectedSni]);
 
   const handleEnter = useCallback(() => {
     if (!index) return;
-    if (query.length < 2 && !selectedSni && !cityQuery) return;
+    const hasInput = query.length >= 2 || !!selectedSni || cityQuery.length > 0;
+    if (!hasInput) return;
+    setSniDropdown(false);
     runFullSearch();
   }, [index, query, cityQuery, selectedSni, runFullSearch]);
 
@@ -184,6 +201,7 @@ const sniSuggestions = sniQuery.length > 0
 
   return (
     <div className="app">
+      {/* ── Header ── */}
       <header className="header">
         <div className="logo" onClick={reset} style={{ cursor: "pointer" }}>
           <div className="logo-mark">
@@ -203,6 +221,7 @@ const sniSuggestions = sniQuery.length > 0
         </nav>
       </header>
 
+      {/* ── Hero / Search ── */}
       <main className="hero">
         <p className="eyebrow">Konsumentskydd &amp; transparens</p>
         <h1 className="hero-title">Kolla företaget<br />innan du handlar</h1>
@@ -210,9 +229,8 @@ const sniSuggestions = sniQuery.length > 0
           Sök på bolagsnamn, bransch eller ort — eller kombinera alla tre.
         </p>
 
-        {/* Search row */}
         <div className="search-row">
-          {/* Company name */}
+          {/* Bolagsnamn */}
           <div className="search-wrap" style={{ flex: 2 }}>
             <svg className="search-icon" viewBox="0 0 16 16" fill="none" width="16" height="16">
               <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.3"/>
@@ -225,14 +243,14 @@ const sniSuggestions = sniQuery.length > 0
               placeholder={isLoading ? "Laddar register…" : "Bolagsnamn…"}
               value={query}
               disabled={isLoading || !!loadError}
-              onChange={(e) => { setSelected(null); setDetail(null); setFullResults(null); setQuery(e.target.value); }}
-              onKeyDown={(e) => e.key === "Enter" && handleEnter()}
+              onChange={e => { setSelected(null); setDetail(null); setFullResults(null); setQuery(e.target.value); }}
+              onKeyDown={e => e.key === "Enter" && handleEnter()}
               autoFocus
             />
             {query && <button className="clear-btn" onClick={() => { setQuery(""); setFullResults(null); }}>✕</button>}
           </div>
 
-          {/* SNI / Branch */}
+          {/* Bransch / SNI */}
           <div className="search-wrap" style={{ flex: 2, position: "relative" }}>
             <svg className="search-icon" viewBox="0 0 16 16" fill="none" width="16" height="16">
               <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.3"/>
@@ -248,8 +266,8 @@ const sniSuggestions = sniQuery.length > 0
               disabled={isLoading || !!loadError}
               onFocus={() => { setSniDropdown(true); if (selectedSni) { setSelectedSni(null); setSniQuery(""); } }}
               onBlur={() => setTimeout(() => setSniDropdown(false), 150)}
-              onChange={(e) => { setSniQuery(e.target.value); setSelectedSni(null); setFullResults(null); }}
-              onKeyDown={(e) => e.key === "Enter" && handleEnter()}
+              onChange={e => { setSniQuery(e.target.value); setSelectedSni(null); setFullResults(null); }}
+              onKeyDown={e => e.key === "Enter" && handleEnter()}
             />
             {(selectedSni || sniQuery) && (
               <button className="clear-btn" onClick={() => { setSelectedSni(null); setSniQuery(""); setFullResults(null); }}>✕</button>
@@ -257,7 +275,7 @@ const sniSuggestions = sniQuery.length > 0
             {sniDropdown && (
               <div className="sni-dropdown">
                 {sniSuggestions.length === 0
-                  ? <div className="sni-item" style={{color:"#aaa"}}>Inga träffar</div>
+                  ? <div className="sni-item" style={{ color: "#aaa" }}>Inga träffar</div>
                   : sniSuggestions.map(([kod, namn]) => (
                     <div key={kod} className="sni-item" onMouseDown={() => {
                       setSelectedSni({ kod, namn });
@@ -274,7 +292,7 @@ const sniSuggestions = sniQuery.length > 0
             )}
           </div>
 
-          {/* City */}
+          {/* Ort */}
           <div className="search-wrap" style={{ flex: 1 }}>
             <svg className="search-icon" viewBox="0 0 16 16" fill="none" width="16" height="16">
               <path d="M8 1.5C5.5 1.5 3.5 3.5 3.5 6c0 3.5 4.5 8.5 4.5 8.5S12.5 9.5 12.5 6c0-2.5-2-4.5-4.5-4.5z" stroke="currentColor" strokeWidth="1.3"/>
@@ -286,18 +304,14 @@ const sniSuggestions = sniQuery.length > 0
               placeholder="Ort…"
               value={cityQuery}
               disabled={isLoading || !!loadError}
-              onChange={(e) => { setFullResults(null); setCityQuery(e.target.value); }}
-              onKeyDown={(e) => e.key === "Enter" && handleEnter()}
+              onChange={e => { setFullResults(null); setCityQuery(e.target.value); }}
+              onKeyDown={e => e.key === "Enter" && handleEnter()}
             />
             {cityQuery && <button className="clear-btn" onClick={() => { setCityQuery(""); setFullResults(null); }}>✕</button>}
           </div>
 
-          {/* Search button */}
-          <button
-            className="search-btn"
-            disabled={!hasSearch || isLoading}
-            onClick={handleEnter}
-          >
+          {/* Sök-knapp */}
+          <button className="search-btn" disabled={!hasSearch || isLoading} onClick={handleEnter}>
             Sök
           </button>
         </div>
@@ -310,7 +324,7 @@ const sniSuggestions = sniQuery.length > 0
             : isLoading ? "Laddar register…" : ""}
         </p>
 
-        {/* SNI chip */}
+        {/* Vald bransch-chip */}
         {selectedSni && (
           <div className="filter-chips">
             <div className="chip">
@@ -321,13 +335,13 @@ const sniSuggestions = sniQuery.length > 0
           </div>
         )}
 
-        {/* Dropdown — max 20 */}
+        {/* Dropdown — max 20, live medan man skriver */}
         {hits.length > 0 && !selected && !fullResults && (
           <div className="dropdown">
             <div className="dropdown-label">
               {hits.length === 20 ? "Visar 20 — tryck Enter eller Sök för alla" : `${hits.length} träffar`}
             </div>
-            {hits.map((row) => (
+            {hits.map(row => (
               <div key={row[0]} className="dropdown-item" onClick={() => selectBolag(row)}>
                 <div className="avatar">{initials(row[1])}</div>
                 <div>
@@ -340,7 +354,7 @@ const sniSuggestions = sniQuery.length > 0
           </div>
         )}
 
-        {/* Full results */}
+        {/* Fullständiga resultat */}
         {fullResults && !selected && (
           <div className="full-results">
             <div className="full-results-header">
@@ -352,7 +366,7 @@ const sniSuggestions = sniQuery.length > 0
               <button className="close-btn" onClick={() => setFullResults(null)}>Stäng ✕</button>
             </div>
             <div className="full-results-list">
-              {fullResults.slice(0, 200).map((row) => (
+              {fullResults.slice(0, 200).map(row => (
                 <div key={row[0]} className="dropdown-item" onClick={() => selectBolag(row)}>
                   <div className="avatar">{initials(row[1])}</div>
                   <div>
@@ -372,12 +386,14 @@ const sniSuggestions = sniQuery.length > 0
         )}
       </main>
 
+      {/* ── Trust bar ── */}
       <div className="trust-bar">
-        <span className="trust-item"><span className="dot green" />Källa: Bolagsverket</span>
+        <span className="trust-item"><span className="dot green" />Källa: Bolagsverket &amp; SCB</span>
         <span className="trust-item"><span className="dot green" />Uppdateras veckovis</span>
         <span className="trust-item"><span className="dot green" />Öppna offentliga data</span>
       </div>
 
+      {/* ── Bolagskort ── */}
       {selected && (
         <section className="detail-section">
           {detailLoading && (
@@ -396,6 +412,7 @@ const sniSuggestions = sniQuery.length > 0
   );
 }
 
+// ── Detail Card ───────────────────────────────────────────────────────────────
 function DetailCard({ bolag, data }) {
   const namn = data?.organisationsnamn?.organisationsnamnLista?.[0]?.namn ?? bolag[1];
   const orgnr = fmtOrgnr(bolag[0]);
@@ -405,7 +422,9 @@ function DetailCard({ bolag, data }) {
   const street = post?.utdelningsadress ?? "—";
   const zip = post?.postnummer ?? "—";
   const sniArr = data?.naringsgrenOrganisation?.sni;
-  const sniText = Array.isArray(sniArr) ? sniArr.map(s => `${s.kod} – ${s.klartext}`).join(", ") : sniArr ?? null;
+  const sniText = Array.isArray(sniArr)
+    ? sniArr.map(s => `${s.kod} – ${s.klartext}`).join(", ")
+    : sniArr ?? null;
   const verksamhet = data?.verksamhetsbeskrivning?.beskrivning ?? null;
   const isActive = data?.verksamOrganisation?.kod === "JA";
   const form = data?.organisationsform?.klartext ?? "Aktiebolag";
@@ -455,7 +474,7 @@ function DetailCard({ bolag, data }) {
       </div>
 
       <div className="detail-footer">
-        <span className="footer-note">Data från Bolagsverket · Värdefulla datamängder v1</span>
+        <span className="footer-note">Data från Bolagsverket &amp; SCB · Värdefulla datamängder v1</span>
       </div>
     </div>
   );
