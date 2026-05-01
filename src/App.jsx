@@ -32,7 +32,6 @@ const SNI_LIST = [
   ["96","Övriga konsumenttjänster"],
 ];
 
-// ── API helpers ──────────────────────────────────────────────────────────────
 let cachedToken = null;
 let tokenExpiry = 0;
 
@@ -56,7 +55,6 @@ async function fetchBolag(orgnr) {
   return data?.organisationer?.[0] ?? data;
 }
 
-// ── Utilities ────────────────────────────────────────────────────────────────
 function fmtOrgnr(s) {
   const d = s.replace(/\D/g, "");
   if (d.length === 10) return `${d.slice(0, 6)}-${d.slice(6)}`;
@@ -67,10 +65,9 @@ function initials(name) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
 }
 
-// ── Search ───────────────────────────────────────────────────────────────────
-// index row: [orgnr, namn, city, regdatum, sni5]
-// sniKod: 2-digit prefix to filter on, e.g. "56" for restaurang
-function searchIndex(index, q, cityQ, sniKod) {
+// row: [orgnr, namn, city, regdatum, sni, aktiv]
+// aktiv: 1 = aktiv, 0 = avregistrerad
+function searchIndex(index, q, cityQ, sniKod, inkluderaAvregistrerade) {
   const ql = q.toLowerCase().trim();
   const cl = cityQ.toLowerCase().trim();
   const exact = [], starts = [], wordStarts = [], contains = [];
@@ -81,19 +78,18 @@ function searchIndex(index, q, cityQ, sniKod) {
     const n = row[1].toLowerCase();
     const c = (row[2] ?? "").toLowerCase();
     const sni = row[4] ?? "";
+    const aktiv = row[5] ?? 1;
 
-    // Apply filters
+    if (!inkluderaAvregistrerade && aktiv === 0) continue;
     if (cl && !c.includes(cl)) continue;
     if (sniKod && !sni.startsWith(sniKod)) continue;
 
-    // No name query — just collect (city/SNI filter already applied)
     if (!ql) {
       contains.push(row);
       if (++containsCount >= 500) break;
       continue;
     }
 
-    // Relevance buckets
     if (n === ql) exact.push(row);
     else if (n.startsWith(ql)) starts.push(row);
     else if (n.split(/\s+/).some(w => w.startsWith(ql))) wordStarts.push(row);
@@ -112,7 +108,6 @@ function searchIndex(index, q, cityQ, sniKod) {
   ];
 }
 
-// ── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
   const [index, setIndex] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -120,11 +115,12 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [cityQuery, setCityQuery] = useState("");
   const [sniQuery, setSniQuery] = useState("");
-  const [selectedSni, setSelectedSni] = useState(null); // { kod, namn }
+  const [selectedSni, setSelectedSni] = useState(null);
   const [sniDropdown, setSniDropdown] = useState(false);
+  const [inkluderaAvregistrerade, setInkluderaAvregistrerade] = useState(false);
 
-  const [hits, setHits] = useState([]);           // dropdown (max 20)
-  const [fullResults, setFullResults] = useState(null); // full list after Enter/Sök
+  const [hits, setHits] = useState([]);
+  const [fullResults, setFullResults] = useState(null);
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -132,7 +128,6 @@ export default function App() {
 
   const inputRef = useRef(null);
 
-  // Load 9 index files in parallel
   useEffect(() => {
     const files = Array.from({ length: 9 }, (_, i) => `/bolag_${i}.json`);
     Promise.all(files.map(f => fetch(f).then(r => r.json())))
@@ -140,28 +135,27 @@ export default function App() {
       .catch(e => setLoadError(e.message));
   }, []);
 
-  // SNI dropdown suggestions
+  const totalAktiva = index ? index.filter(r => r[5] === 1).length : 0;
+  const totalAlla = index ? index.length : 0;
+
   const sniSuggestions = sniQuery.length > 0
     ? SNI_LIST.filter(([kod, namn]) =>
         namn.toLowerCase().includes(sniQuery.toLowerCase()) || kod.startsWith(sniQuery)
       )
     : SNI_LIST;
 
-  // Dropdown hits — live while typing name (no SNI filter in dropdown mode for perf)
   useEffect(() => {
     if (!index || fullResults !== null) return;
     if (query.length < 2 && !cityQuery) { setHits([]); return; }
-    if (selectedSni) { setHits([]); return; } // SNI always requires full search
-    setHits(searchIndex(index, query, cityQuery, "").slice(0, 20));
-  }, [query, cityQuery, selectedSni, index, fullResults]);
+    if (selectedSni) { setHits([]); return; }
+    setHits(searchIndex(index, query, cityQuery, "", inkluderaAvregistrerade).slice(0, 20));
+  }, [query, cityQuery, selectedSni, index, fullResults, inkluderaAvregistrerade]);
 
-  // Full search — triggered by Enter or Sök button
   const runFullSearch = useCallback(() => {
     if (!index) return;
-    const sniKod = selectedSni?.kod ?? "";
-    setFullResults(searchIndex(index, query, cityQuery, sniKod));
+    setFullResults(searchIndex(index, query, cityQuery, selectedSni?.kod ?? "", inkluderaAvregistrerade));
     setHits([]);
-  }, [index, query, cityQuery, selectedSni]);
+  }, [index, query, cityQuery, selectedSni, inkluderaAvregistrerade]);
 
   const handleEnter = useCallback(() => {
     if (!index) return;
@@ -201,7 +195,6 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* ── Header ── */}
       <header className="header">
         <div className="logo" onClick={reset} style={{ cursor: "pointer" }}>
           <div className="logo-mark">
@@ -221,7 +214,6 @@ export default function App() {
         </nav>
       </header>
 
-      {/* ── Hero / Search ── */}
       <main className="hero">
         <p className="eyebrow">Konsumentskydd &amp; transparens</p>
         <h1 className="hero-title">Kolla företaget<br />innan du handlar</h1>
@@ -230,7 +222,6 @@ export default function App() {
         </p>
 
         <div className="search-row">
-          {/* Bolagsnamn */}
           <div className="search-wrap" style={{ flex: 2 }}>
             <svg className="search-icon" viewBox="0 0 16 16" fill="none" width="16" height="16">
               <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.3"/>
@@ -250,7 +241,6 @@ export default function App() {
             {query && <button className="clear-btn" onClick={() => { setQuery(""); setFullResults(null); }}>✕</button>}
           </div>
 
-          {/* Bransch / SNI */}
           <div className="search-wrap" style={{ flex: 2, position: "relative" }}>
             <svg className="search-icon" viewBox="0 0 16 16" fill="none" width="16" height="16">
               <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.3"/>
@@ -292,7 +282,6 @@ export default function App() {
             )}
           </div>
 
-          {/* Ort */}
           <div className="search-wrap" style={{ flex: 1 }}>
             <svg className="search-icon" viewBox="0 0 16 16" fill="none" width="16" height="16">
               <path d="M8 1.5C5.5 1.5 3.5 3.5 3.5 6c0 3.5 4.5 8.5 4.5 8.5S12.5 9.5 12.5 6c0-2.5-2-4.5-4.5-4.5z" stroke="currentColor" strokeWidth="1.3"/>
@@ -310,21 +299,34 @@ export default function App() {
             {cityQuery && <button className="clear-btn" onClick={() => { setCityQuery(""); setFullResults(null); }}>✕</button>}
           </div>
 
-          {/* Sök-knapp */}
           <button className="search-btn" disabled={!hasSearch || isLoading} onClick={handleEnter}>
             Sök
           </button>
         </div>
 
+        {/* Filter row */}
+        <div className="filter-row">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={inkluderaAvregistrerade}
+              onChange={e => { setInkluderaAvregistrerade(e.target.checked); setFullResults(null); setHits([]); }}
+            />
+            Inkludera avregistrerade bolag
+          </label>
+          {index && (
+            <span className="register-count">
+              {inkluderaAvregistrerade
+                ? `${totalAlla.toLocaleString("sv-SE")} bolag totalt`
+                : `${totalAktiva.toLocaleString("sv-SE")} aktiva bolag`}
+            </span>
+          )}
+        </div>
+
         {loadError && <p className="load-error">Kunde inte ladda bolagsregistret: {loadError}</p>}
 
-        <p className="search-hint">
-          {index
-            ? `${index.length.toLocaleString("sv-SE")} aktiva aktiebolag · Tryck Enter eller Sök för alla träffar`
-            : isLoading ? "Laddar register…" : ""}
-        </p>
+        <p className="search-hint">Tryck Enter eller Sök för alla träffar</p>
 
-        {/* Vald bransch-chip */}
         {selectedSni && (
           <div className="filter-chips">
             <div className="chip">
@@ -335,7 +337,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Dropdown — max 20, live medan man skriver */}
         {hits.length > 0 && !selected && !fullResults && (
           <div className="dropdown">
             <div className="dropdown-label">
@@ -346,7 +347,10 @@ export default function App() {
                 <div className="avatar">{initials(row[1])}</div>
                 <div>
                   <div className="item-name">{row[1]}</div>
-                  <div className="item-meta">{fmtOrgnr(row[0])} · {row[2]}</div>
+                  <div className="item-meta">
+                    {fmtOrgnr(row[0])} · {row[2]}
+                    {row[5] === 0 && <span className="avregistrerad-tag">Avregistrerad</span>}
+                  </div>
                 </div>
                 <span className="item-arrow">›</span>
               </div>
@@ -354,7 +358,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Fullständiga resultat */}
         {fullResults && !selected && (
           <div className="full-results">
             <div className="full-results-header">
@@ -362,16 +365,20 @@ export default function App() {
                 {fullResults.length.toLocaleString("sv-SE")} träffar
                 {selectedSni ? ` · ${selectedSni.namn}` : ""}
                 {cityQuery ? ` i ${cityQuery}` : ""}
+                {inkluderaAvregistrerade ? " · inkl. avregistrerade" : ""}
               </span>
               <button className="close-btn" onClick={() => setFullResults(null)}>Stäng ✕</button>
             </div>
             <div className="full-results-list">
               {fullResults.slice(0, 200).map(row => (
                 <div key={row[0]} className="dropdown-item" onClick={() => selectBolag(row)}>
-                  <div className="avatar">{initials(row[1])}</div>
+                  <div className="avatar" style={{ opacity: row[5] === 0 ? 0.5 : 1 }}>{initials(row[1])}</div>
                   <div>
-                    <div className="item-name">{row[1]}</div>
-                    <div className="item-meta">{fmtOrgnr(row[0])} · {row[2]}</div>
+                    <div className="item-name" style={{ color: row[5] === 0 ? "#888" : undefined }}>{row[1]}</div>
+                    <div className="item-meta">
+                      {fmtOrgnr(row[0])} · {row[2]}
+                      {row[5] === 0 && <span className="avregistrerad-tag">Avregistrerad</span>}
+                    </div>
                   </div>
                   <span className="item-arrow">›</span>
                 </div>
@@ -386,14 +393,12 @@ export default function App() {
         )}
       </main>
 
-      {/* ── Trust bar ── */}
       <div className="trust-bar">
         <span className="trust-item"><span className="dot green" />Källa: Bolagsverket &amp; SCB</span>
         <span className="trust-item"><span className="dot green" />Uppdateras veckovis</span>
         <span className="trust-item"><span className="dot green" />Öppna offentliga data</span>
       </div>
 
-      {/* ── Bolagskort ── */}
       {selected && (
         <section className="detail-section">
           {detailLoading && (
@@ -412,7 +417,6 @@ export default function App() {
   );
 }
 
-// ── Detail Card ───────────────────────────────────────────────────────────────
 function DetailCard({ bolag, data }) {
   const namn = data?.organisationsnamn?.organisationsnamnLista?.[0]?.namn ?? bolag[1];
   const orgnr = fmtOrgnr(bolag[0]);
