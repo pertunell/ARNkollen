@@ -128,6 +128,7 @@ export default function App() {
   const [selectedSni, setSelectedSni] = useState(null);
   const [sniDropdown, setSniDropdown] = useState(false);
   const [inkluderaAvregistrerade, setInkluderaAvregistrerade] = useState(false);
+  const [sortering, setSortering] = useState("relevans"); // relevans | samst | bast
   const [hits, setHits] = useState([]);
   const [fullResults, setFullResults] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -137,10 +138,7 @@ export default function App() {
   const inputRef = useRef(null);
 
   useEffect(() => {
-    const files = [
-      ...Array.from({ length: 9 }, (_, i) => `/bolag_${i}.json`),
-      '/bolag_test.json'
-    ];
+    const files = Array.from({ length: 9 }, (_, i) => `/bolag_${i}.json`);
     Promise.all(files.map(f => fetch(f).then(r => r.json())))
       .then(chunks => setIndex(chunks.flat()))
       .catch(e => setLoadError(e.message));
@@ -163,9 +161,24 @@ export default function App() {
 
   const runFullSearch = useCallback(() => {
     if (!index) return;
-    setFullResults(searchIndex(index, query, cityQuery, selectedSni?.kod ?? "", inkluderaAvregistrerade));
+    const res = searchIndex(index, query, cityQuery, selectedSni?.kod ?? "", inkluderaAvregistrerade);
+    setFullResults(sorteraResultat(res, sortering));
     setHits([]);
   }, [index, query, cityQuery, selectedSni, inkluderaAvregistrerade]);
+
+  const sorteraResultat = useCallback((results, sort) => {
+    if (sort === "relevans") return results;
+    return [...results].sort((a, b) => {
+      const fa = a[6];
+      const fb = b[6];
+      if (!fa && !fb) return 0;
+      if (!fa) return sort === "samst" ? 1 : -1;
+      if (!fb) return sort === "samst" ? -1 : 1;
+      // Score: rod=2, gron=0 per flagga
+      const score = (f) => (f.f1==="rod"?2:0) + (f.f2==="rod"?2:0) + (f.f3==="rod"?4:0);
+      return sort === "samst" ? score(fb) - score(fa) : score(fa) - score(fb);
+    });
+  }, []);
 
   const handleEnter = useCallback(() => {
     if (!index) return;
@@ -322,13 +335,14 @@ export default function App() {
             {hits.map(row => (
               <div key={row[0]} className="dropdown-item" onClick={() => selectBolag(row)}>
                 <div className="avatar">{initials(row[1])}</div>
-                <div>
+                <div style={{flex:1,minWidth:0}}>
                   <div className="item-name">{row[1]}</div>
                   <div className="item-meta">
                     {fmtOrgnr(row[0])} · {row[2]}
                     {row[5] === 0 && <span className="avregistrerad-tag">Avregistrerad</span>}
                   </div>
                 </div>
+                {row[6] && <ArnPrickar flaggor={row[6]} />}
                 <span className="item-arrow">›</span>
               </div>
             ))}
@@ -344,19 +358,29 @@ export default function App() {
                 {cityQuery ? ` i ${cityQuery}` : ""}
                 {inkluderaAvregistrerade ? " · inkl. avregistrerade" : ""}
               </span>
-              <button className="close-btn" onClick={() => setFullResults(null)}>Stäng ✕</button>
+              <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
+                <span style={{fontSize:"11px",color:"#aaa"}}>Sortera:</span>
+                {["relevans","samst","bast"].map(s => (
+                  <button key={s} className={`sort-btn ${sortering===s?"sort-btn-active":""}`}
+                    onClick={() => { setSortering(s); setFullResults(sorteraResultat(fullResults, s)); }}>
+                    {s==="relevans"?"Relevans":s==="samst"?"Sämst ARN":"Bäst ARN"}
+                  </button>
+                ))}
+                <button className="close-btn" onClick={() => setFullResults(null)}>✕</button>
+              </div>
             </div>
             <div className="full-results-list">
               {fullResults.slice(0, 200).map(row => (
                 <div key={row[0]} className="dropdown-item" onClick={() => selectBolag(row)}>
                   <div className="avatar" style={{ opacity: row[5] === 0 ? 0.5 : 1 }}>{initials(row[1])}</div>
-                  <div>
+                  <div style={{flex:1,minWidth:0}}>
                     <div className="item-name" style={{ color: row[5] === 0 ? "#888" : undefined }}>{row[1]}</div>
                     <div className="item-meta">
                       {fmtOrgnr(row[0])} · {row[2]}
                       {row[5] === 0 && <span className="avregistrerad-tag">Avregistrerad</span>}
                     </div>
                   </div>
+                  {row[6] && <ArnPrickar flaggor={row[6]} />}
                   <span className="item-arrow">›</span>
                 </div>
               ))}
@@ -383,6 +407,27 @@ export default function App() {
           {detail && !detailLoading && <DetailCard bolag={selected} data={detail} />}
         </section>
       )}
+    </div>
+  );
+}
+
+// ── ARN Prickar — visas i sökresultatlistan ──────────────────────────────────
+function ArnPrickar({ flaggor }) {
+  const prickar = [
+    { f: flaggor.f1, k: flaggor.k1, label: "Ärenden" },
+    { f: flaggor.f2, k: flaggor.k2, label: "Fälld" },
+    { f: flaggor.f3, k: flaggor.k3, label: "Följt" },
+  ];
+  return (
+    <div className="arn-prickar" title={prickar.map(p => `${p.label}: ${p.k}`).join("\n")}>
+      {prickar.map((p, i) => (
+        <div key={i} className={`arn-prick arn-prick-${p.f}`}>
+          <div className="arn-prick-tooltip">
+            <strong>{p.label}</strong>
+            <span>{p.k}</span>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

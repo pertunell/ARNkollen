@@ -856,3 +856,245 @@ body {
 .flag-gron .flag-dot { background: #639922; }
 .flag-rod { background: #FCEBEB; border-color: #F7C1C1; color: #791F1F; }
 .flag-rod .flag-dot { background: #E24B4A; }
+
+/* ── ARN Ärenden ── */
+.arenden-list {
+  margin-top: 0.5rem;
+  border: 1px solid #e8e8e6;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.arende-row {
+  border-bottom: 1px solid #f0f0ee;
+}
+.arende-row:last-child { border-bottom: none; }
+
+.arende-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  cursor: pointer;
+  gap: 8px;
+  transition: background 0.1s;
+}
+.arende-header:hover { background: #f8f8f6; }
+
+.arende-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.arende-nr {
+  font-family: monospace;
+  font-size: 11px;
+  color: #aaa;
+}
+
+.arende-datum {
+  font-size: 12px;
+  color: #888;
+}
+
+.arende-vara {
+  font-size: 13px;
+  color: #1a1a1a;
+  font-weight: 500;
+}
+
+.arende-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.arn-outcome {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 100px;
+}
+.outcome-bifall { background: #EAF3DE; color: #3B6D11; }
+.outcome-avslag { background: #FCEBEB; color: #A32D2D; }
+.outcome-delvis { background: #FAEEDA; color: #854F0B; }
+.outcome-avvisat { background: #F0F0EE; color: #888; }
+
+.arn-foljt {
+  font-size: 11px;
+  font-weight: 500;
+}
+.foljt-ja { color: #3B6D11; }
+.foljt-nej { color: #A32D2D; }
+
+.arende-chevron {
+  font-size: 10px;
+  color: #bbb;
+}
+
+.arende-body {
+  padding: 12px 12px 14px;
+  background: #fafaf8;
+  border-top: 1px solid #f0f0ee;
+}
+
+.arende-beskrivning {
+  font-size: 13px;
+  color: #444;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.arende-belopp {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 12px;
+}
+
+.beslut-text {
+  border: 1px solid #e0e0de;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.beslut-text-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #888;
+  padding: 6px 10px;
+  background: #f0f0ee;
+  border-bottom: 1px solid #e0e0de;
+}
+
+.beslut-pre {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #444;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  background: white;
+}
+
+/* Flag colors */
+.flag-red { background: #FCEBEB; border-color: #F7C1C1; color: #791F1F; }
+.flag-red .flag-dot { background: #E24B4A; }
+.flag-amber { background: #FAEEDA; border-color: #FAC775; color: #854F0B; }
+.flag-amber .flag-dot { background: #BA7517; }
+.flag-green { background: #EAF3DE; border-color: #C0DD97; color: #3B6D11; }
+.flag-green .flag-dot { background: #639922; }
+
+/* ── Uppdaterade flaggor med kontextvärden ── */
+.flag {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: var(--border-radius-md, 8px);
+  border: 1px solid #e8e8e6;
+  flex: 1;
+  min-width: 0;
+}
+
+.flag-label {
+  font-weight: 500;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.flag-context {
+  font-size: 11px;
+  opacity: 0.8;
+  line-height: 1.4;
+}
+
+.flag-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.flag-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.flag-gron { background: #EAF3DE; border-color: #C0DD97; color: #3B6D11; }
+.flag-gron .flag-dot { background: #639922; }
+.flag-rod { background: #FCEBEB; border-color: #F7C1C1; color: #791F1F; }
+.flag-rod .flag-dot { background: #E24B4A; }
+
+/* ── ARN Prickar i sökresultatlistan ── */
+.arn-prickar {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+.arn-prick {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  cursor: help;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.arn-prick-gron { background: #639922; }
+.arn-prick-rod { background: #E24B4A; }
+
+.arn-prick-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background: #1a1a1a;
+  color: white;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 200;
+  min-width: 220px;
+  flex-direction: column;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.arn-prick:hover .arn-prick-tooltip {
+  display: flex;
+}
+
+.arn-prick-tooltip strong {
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+/* ── Sorteringsknappar ── */
+.sort-btn {
+  font-size: 11px;
+  font-family: inherit;
+  padding: 3px 8px;
+  border: 1px solid #e0e0de;
+  border-radius: 100px;
+  background: white;
+  color: #666;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sort-btn:hover { border-color: #185FA5; color: #185FA5; }
+.sort-btn-active { background: #185FA5; color: white; border-color: #185FA5; }
