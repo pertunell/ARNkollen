@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ARN_BOLAG, ARN_ARENDEN, getBolagStats } from "./arnData.js";
+import { ARN_BOLAG, ARN_ARENDEN, getBolagStats, getBolagFlaggor } from "./arnData.js";
 
 const BV_TOKEN_URL = "/api/token";
 const BV_API_URL = "/api/bolag/";
@@ -106,10 +106,16 @@ function arnOrgnrKey(orgnr) {
 
 function getArnStats(orgnr) {
   const key = arnOrgnrKey(orgnr);
-  // Check both index (10-digit) and ARN_BOLAG keys
   const arnKey = Object.keys(ARN_BOLAG).find(k => arnOrgnrKey(k) === key);
   if (!arnKey) return null;
   return getBolagStats(arnKey);
+}
+
+function getArnFlaggor(orgnr) {
+  const key = arnOrgnrKey(orgnr);
+  const arnKey = Object.keys(ARN_BOLAG).find(k => arnOrgnrKey(k) === key);
+  if (!arnKey) return null;
+  return getBolagFlaggor(arnKey);
 }
 
 // ── App ──────────────────────────────────────────────────────────────────────
@@ -130,11 +136,8 @@ export default function App() {
   const [detailError, setDetailError] = useState(null);
   const inputRef = useRef(null);
 
-useEffect(() => {
-    const files = [
-      ...Array.from({ length: 9 }, (_, i) => `/bolag_${i}.json`),
-      '/bolag_test.json'
-    ];
+  useEffect(() => {
+    const files = Array.from({ length: 9 }, (_, i) => `/bolag_${i}.json`);
     Promise.all(files.map(f => fetch(f).then(r => r.json())))
       .then(chunks => setIndex(chunks.flat()))
       .catch(e => setLoadError(e.message));
@@ -402,17 +405,6 @@ function DetailCard({ bolag, data }) {
 
   const arnStats = getArnStats(bolag[0]);
 
-  // Flag colors
-  const flagColor = (val, type) => {
-    if (type === "arenden") return val > 0 ? (val >= 5 ? "flag-red" : "flag-amber") : "flag-green";
-    if (type === "fallen") return val > 0 ? (val >= 3 ? "flag-red" : "flag-amber") : "flag-green";
-    if (type === "foljt") {
-      if (!arnStats || arnStats.fallen === 0) return "flag-green";
-      return val < arnStats.fallen ? "flag-red" : "flag-green";
-    }
-    return "flag-gray";
-  };
-
   return (
     <div className="detail-card">
       <div className="detail-header">
@@ -445,19 +437,26 @@ function DetailCard({ bolag, data }) {
         {arnStats ? (
           <>
             <div className="flag-row" style={{ marginBottom: "1rem" }}>
-              <div className={`flag ${flagColor(arnStats.antal, "arenden")}`}>
+              <div className={`flag flag-${arnStats.flaggArenden}`} title={arnStats.kontextArenden}>
                 <div className="flag-dot" />
-                {arnStats.antal} ärende{arnStats.antal !== 1 ? "n" : ""}
+                <div>
+                  <div className="flag-label">Ärenden hos ARN</div>
+                  <div className="flag-context">{arnStats.kontextArenden}</div>
+                </div>
               </div>
-              <div className={`flag ${flagColor(arnStats.fallen, "fallen")}`}>
+              <div className={`flag flag-${arnStats.flaggFalld}`} title={arnStats.kontextFalld}>
                 <div className="flag-dot" />
-                {arnStats.fallen} fälld{arnStats.fallen !== 1 ? "a" : ""}
+                <div>
+                  <div className="flag-label">Fälld av ARN</div>
+                  <div className="flag-context">{arnStats.kontextFalld}</div>
+                </div>
               </div>
-              <div className={`flag ${flagColor(arnStats.foljt, "foljt")}`}>
+              <div className={`flag flag-${arnStats.flaggFoljt}`} title={arnStats.kontextFoljt}>
                 <div className="flag-dot" />
-                {arnStats.fallen > 0
-                  ? `${arnStats.foljt} av ${arnStats.fallen} beslut följda`
-                  : "Inga fällningar"}
+                <div>
+                  <div className="flag-label">Följt ARN:s beslut</div>
+                  <div className="flag-context">{arnStats.kontextFoljt}</div>
+                </div>
               </div>
             </div>
 
@@ -511,9 +510,9 @@ function DetailCard({ bolag, data }) {
               Inga registrerade ARN-ärenden för detta bolag.
             </div>
             <div className="flag-row">
-              <div className="flag flag-green"><div className="flag-dot" />Ärenden: 0</div>
-              <div className="flag flag-green"><div className="flag-dot" />Fälld: 0</div>
-              <div className="flag flag-green"><div className="flag-dot" />Inga fällningar</div>
+              <div className="flag flag-gron"><div className="flag-dot" /><div><div className="flag-label">Ärenden hos ARN</div><div className="flag-context">Inga ärenden registrerade</div></div></div>
+              <div className="flag flag-gron"><div className="flag-dot" /><div><div className="flag-label">Fälld av ARN</div><div className="flag-context">Inga prövade ärenden</div></div></div>
+              <div className="flag flag-gron"><div className="flag-dot" /><div><div className="flag-label">Följt ARN:s beslut</div><div className="flag-context">Inga fällningar</div></div></div>
             </div>
           </>
         )}

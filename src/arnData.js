@@ -1,6 +1,18 @@
 // ARN Test Data — Påhittad data för demonstration
 // Tre branscher: Motor/Reparation, Resor, Elektronik
 // Format följer PerWs GOSOL-lista + ARN:s beslutsdokumentstruktur
+// Flagglogik enligt ARNkollen konceptdokument v3:
+//   Flagga 1 - Ärenden: Röd om > 150% av branschsnitt senaste 3 år
+//   Flagga 2 - Fälld:   Röd om fällningsgrad > branschsnitt
+//   Flagga 3 - Följt:   Röd om minst ett beslut ej följt (genuint binär)
+
+// ── Branschsnitt för testfas (ersätts med ARN-statistik i produktion) ──────
+export const BRANSCH_SNITT = {
+  "45": { arendenPerAr: 3.2, fallningsgrad: 41, namn: "Motor & reparation" },
+  "79": { arendenPerAr: 4.8, fallningsgrad: 35, namn: "Resor & turism" },
+  "47": { arendenPerAr: 5.1, fallningsgrad: 38, namn: "Detaljhandel elektronik" },
+  "93": { arendenPerAr: 2.1, fallningsgrad: 33, namn: "Sport & fritid" },
+};
 
 export const ARN_BOLAG = {
   // ── MOTOR / REPARATION ──────────────────────────────────────────────────
@@ -796,15 +808,85 @@ Nämnden avslår anmälarens krav. Produktbeskrivningen var korrekt och konsumen
   },
 ];
 
-// ── Beräknade flaggor per bolag ──────────────────────────────────────────────
+// ── Flaggberäkning enligt konceptdokument ────────────────────────────────────
+// Senaste 3 åren räknas (36 månader bakåt från idag)
+const CUTOFF = new Date();
+CUTOFF.setFullYear(CUTOFF.getFullYear() - 3);
+const cutoffStr = CUTOFF.toISOString().slice(0, 10);
+
 export function getBolagStats(orgnr) {
-  const arenden = ARN_ARENDEN.filter(a => a.orgnr === orgnr);
-  const fallen = arenden.filter(a => a.beslutskod === "Bifall" || a.beslutskod === "Delvis bifall");
-  const foljda = fallen.filter(a => a.foljt_beslut);
+  const bolagInfo = ARN_BOLAG[orgnr];
+  if (!bolagInfo) return null;
+
+  const alleArenden = ARN_ARENDEN.filter(a => a.orgnr === orgnr);
+  if (!alleArenden.length) return null;
+
+  // Senaste 3 år
+  const recentArenden = alleArenden.filter(a => a.datum_anmalan >= cutoffStr);
+
+  // Prövade = ej avvisade
+  const provade = recentArenden.filter(a => a.beslutskod !== "Avvisat");
+  const fallen = provade.filter(a => a.beslutskod === "Bifall" || a.beslutskod === "Delvis bifall");
+  const ejFoljda = fallen.filter(a => !a.foljt_beslut);
+
+  // Branschsnitt — matcha på 2-siffrig SNI
+  const sniPrefix = (bolagInfo.sni || "").slice(0, 2);
+  const snitt = BRANSCH_SNITT[sniPrefix] || { arendenPerAr: 3.5, fallningsgrad: 39, namn: "Övrigt" };
+
+  // Beräkningar
+  const arendenPerAr = recentArenden.length / 3;
+  const fallningsgrad = provade.length > 0 ? Math.round(100 * fallen.length / provade.length) : 0;
+
+  // Flagga 1: Ärenden — röd om > 150% av branschsnitt
+  const arendeGrans = snitt.arendenPerAr * 1.5;
+  const flaggArenden = arendenPerAr > arendeGrans ? "rod" : "gron";
+  const kontextArenden = `${recentArenden.length} ärenden senaste 3 åren (branschsnitt: ${snitt.arendenPerAr.toFixed(1)}/år)`;
+
+  // Flagga 2: Fälld — röd om fällningsgrad > branschsnitt
+  const flaggFalld = fallningsgrad > snitt.fallningsgrad ? "rod" : "gron";
+  const kontextFalld = provade.length > 0
+    ? `Konsumenten fick rätt i ${fallen.length} av ${provade.length} prövade ärenden (branschsnitt: ${snitt.fallningsgrad}%)`
+    : "Inga prövade ärenden";
+
+  // Flagga 3: Följt — genuint binär, röd om minst ett ej följt
+  const flaggFoljt = ejFoljda.length > 0 ? "rod" : "gron";
+  const kontextFoljt = fallen.length > 0
+    ? `Följt ${fallen.length - ejFoljda.length} av ${fallen.length} beslut (${Math.round(100 * (fallen.length - ejFoljda.length) / fallen.length)}%)`
+    : "Inga fällningar";
+
   return {
-    antal: arenden.length,
+    // Rådata
+    antal: alleArenden.length,
+    antalRecent: recentArenden.length,
     fallen: fallen.length,
-    foljt: foljda.length,
-    arenden,
+    provade: provade.length,
+    ejFoljda: ejFoljda.length,
+    arendenPerAr,
+    fallningsgrad,
+    arenden: alleArenden,
+    // Flaggor
+    flaggArenden,
+    flaggFalld,
+    flaggFoljt,
+    // Kontextvärden
+    kontextArenden,
+    kontextFalld,
+    kontextFoljt,
+    // Branschinfo
+    branschNamn: snitt.namn,
+  };
+}
+
+// Kortsammanfattning för sökresultatlistan (3 prickar)
+export function getBolagFlaggor(orgnr) {
+  const stats = getBolagStats(orgnr);
+  if (!stats) return null;
+  return {
+    arenden: stats.flaggArenden,
+    falld: stats.flaggFalld,
+    foljt: stats.flaggFoljt,
+    kontextArenden: stats.kontextArenden,
+    kontextFalld: stats.kontextFalld,
+    kontextFoljt: stats.kontextFoljt,
   };
 }
