@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { ARN_BOLAG, ARN_ARENDEN, getBolagStats } from "./arnData.js";
 
 const BV_TOKEN_URL = "/api/token";
 const BV_API_URL = "/api/bolag/";
@@ -65,8 +66,6 @@ function initials(name) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
 }
 
-// row: [orgnr, namn, city, regdatum, sni, aktiv]
-// aktiv: 1 = aktiv, 0 = avregistrerad
 function searchIndex(index, q, cityQ, sniKod, inkluderaAvregistrerade) {
   const ql = q.toLowerCase().trim();
   const cl = cityQ.toLowerCase().trim();
@@ -84,19 +83,11 @@ function searchIndex(index, q, cityQ, sniKod, inkluderaAvregistrerade) {
     if (cl && !c.includes(cl)) continue;
     if (sniKod && !sni.startsWith(sniKod)) continue;
 
-    if (!ql) {
-      contains.push(row);
-      if (++containsCount >= 500) break;
-      continue;
-    }
-
+    if (!ql) { contains.push(row); if (++containsCount >= 500) break; continue; }
     if (n === ql) exact.push(row);
     else if (n.startsWith(ql)) starts.push(row);
     else if (n.split(/\s+/).some(w => w.startsWith(ql))) wordStarts.push(row);
-    else if (n.includes(ql)) {
-      contains.push(row);
-      if (++containsCount >= 500) break;
-    }
+    else if (n.includes(ql)) { contains.push(row); if (++containsCount >= 500) break; }
   }
 
   const sortByName = (a, b) => a[1].localeCompare(b[1], "sv");
@@ -108,24 +99,35 @@ function searchIndex(index, q, cityQ, sniKod, inkluderaAvregistrerade) {
   ];
 }
 
+// ── ARN helpers ──────────────────────────────────────────────────────────────
+function arnOrgnrKey(orgnr) {
+  return orgnr.replace(/\D/g, "");
+}
+
+function getArnStats(orgnr) {
+  const key = arnOrgnrKey(orgnr);
+  // Check both index (10-digit) and ARN_BOLAG keys
+  const arnKey = Object.keys(ARN_BOLAG).find(k => arnOrgnrKey(k) === key);
+  if (!arnKey) return null;
+  return getBolagStats(arnKey);
+}
+
+// ── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
   const [index, setIndex] = useState(null);
   const [loadError, setLoadError] = useState(null);
-
   const [query, setQuery] = useState("");
   const [cityQuery, setCityQuery] = useState("");
   const [sniQuery, setSniQuery] = useState("");
   const [selectedSni, setSelectedSni] = useState(null);
   const [sniDropdown, setSniDropdown] = useState(false);
   const [inkluderaAvregistrerade, setInkluderaAvregistrerade] = useState(false);
-
   const [hits, setHits] = useState([]);
   const [fullResults, setFullResults] = useState(null);
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState(null);
-
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -140,16 +142,14 @@ export default function App() {
 
   const sniSuggestions = sniQuery.length > 0
     ? SNI_LIST.filter(([kod, namn]) =>
-        namn.toLowerCase().includes(sniQuery.toLowerCase()) || kod.startsWith(sniQuery)
-      )
+        namn.toLowerCase().includes(sniQuery.toLowerCase()) || kod.startsWith(sniQuery))
     : SNI_LIST;
 
   useEffect(() => {
     if (!index || fullResults !== null) return;
     if (query.length < 2 && !cityQuery) { setHits([]); return; }
     if (selectedSni) { setHits([]); return; }
-    const results = searchIndex(index, query, cityQuery, "", false).slice(0, 20);
-    setHits(results);
+    setHits(searchIndex(index, query, cityQuery, "", false).slice(0, 20));
   }, [query, cityQuery, selectedSni, index, fullResults]);
 
   const runFullSearch = useCallback(() => {
@@ -160,8 +160,7 @@ export default function App() {
 
   const handleEnter = useCallback(() => {
     if (!index) return;
-    const hasInput = query.length >= 2 || !!selectedSni || cityQuery.length > 0;
-    if (!hasInput) return;
+    if (query.length < 2 && !selectedSni && !cityQuery) return;
     setSniDropdown(false);
     runFullSearch();
   }, [index, query, cityQuery, selectedSni, runFullSearch]);
@@ -218,9 +217,7 @@ export default function App() {
       <main className="hero">
         <p className="eyebrow">Konsumentskydd &amp; transparens</p>
         <h1 className="hero-title">Kolla företaget<br />innan du handlar</h1>
-        <p className="hero-sub">
-          Sök på bolagsnamn, bransch eller ort — eller kombinera alla tre.
-        </p>
+        <p className="hero-sub">Sök på bolagsnamn, bransch eller ort — eller kombinera alla tre.</p>
 
         <div className="search-row">
           <div className="search-wrap" style={{ flex: 2 }}>
@@ -228,17 +225,11 @@ export default function App() {
               <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.3"/>
               <line x1="10" y1="10" x2="14" y2="14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
             </svg>
-            <input
-              ref={inputRef}
-              className="search-input"
-              type="text"
+            <input ref={inputRef} className="search-input" type="text"
               placeholder={isLoading ? "Laddar register…" : "Bolagsnamn…"}
-              value={query}
-              disabled={isLoading || !!loadError}
+              value={query} disabled={isLoading || !!loadError}
               onChange={e => { setSelected(null); setDetail(null); setFullResults(null); setQuery(e.target.value); }}
-              onKeyDown={e => e.key === "Enter" && handleEnter()}
-              autoFocus
-            />
+              onKeyDown={e => e.key === "Enter" && handleEnter()} autoFocus />
             {query && <button className="clear-btn" onClick={() => { setQuery(""); setFullResults(null); }}>✕</button>}
           </div>
 
@@ -249,17 +240,13 @@ export default function App() {
               <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.3"/>
               <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.3"/>
             </svg>
-            <input
-              className="search-input"
-              type="text"
-              placeholder="Bransch…"
+            <input className="search-input" type="text" placeholder="Bransch…"
               value={selectedSni ? selectedSni.namn : sniQuery}
               disabled={isLoading || !!loadError}
               onFocus={() => { setSniDropdown(true); if (selectedSni) { setSelectedSni(null); setSniQuery(""); } }}
               onBlur={() => setTimeout(() => setSniDropdown(false), 150)}
               onChange={e => { setSniQuery(e.target.value); setSelectedSni(null); setFullResults(null); }}
-              onKeyDown={e => e.key === "Enter" && handleEnter()}
-            />
+              onKeyDown={e => e.key === "Enter" && handleEnter()} />
             {(selectedSni || sniQuery) && (
               <button className="clear-btn" onClick={() => { setSelectedSni(null); setSniQuery(""); setFullResults(null); }}>✕</button>
             )}
@@ -269,16 +256,11 @@ export default function App() {
                   ? <div className="sni-item" style={{ color: "#aaa" }}>Inga träffar</div>
                   : sniSuggestions.map(([kod, namn]) => (
                     <div key={kod} className="sni-item" onMouseDown={() => {
-                      setSelectedSni({ kod, namn });
-                      setSniQuery("");
-                      setSniDropdown(false);
-                      setFullResults(null);
+                      setSelectedSni({ kod, namn }); setSniQuery(""); setSniDropdown(false); setFullResults(null);
                     }}>
-                      <span className="sni-kod">{kod}</span>
-                      <span>{namn}</span>
+                      <span className="sni-kod">{kod}</span><span>{namn}</span>
                     </div>
-                  ))
-                }
+                  ))}
               </div>
             )}
           </div>
@@ -288,51 +270,36 @@ export default function App() {
               <path d="M8 1.5C5.5 1.5 3.5 3.5 3.5 6c0 3.5 4.5 8.5 4.5 8.5S12.5 9.5 12.5 6c0-2.5-2-4.5-4.5-4.5z" stroke="currentColor" strokeWidth="1.3"/>
               <circle cx="8" cy="6" r="1.5" stroke="currentColor" strokeWidth="1.3"/>
             </svg>
-            <input
-              className="search-input"
-              type="text"
-              placeholder="Ort…"
-              value={cityQuery}
-              disabled={isLoading || !!loadError}
+            <input className="search-input" type="text" placeholder="Ort…"
+              value={cityQuery} disabled={isLoading || !!loadError}
               onChange={e => { setFullResults(null); setCityQuery(e.target.value); }}
-              onKeyDown={e => e.key === "Enter" && handleEnter()}
-            />
+              onKeyDown={e => e.key === "Enter" && handleEnter()} />
             {cityQuery && <button className="clear-btn" onClick={() => { setCityQuery(""); setFullResults(null); }}>✕</button>}
           </div>
 
-          <button className="search-btn" disabled={!hasSearch || isLoading} onClick={handleEnter}>
-            Sök
-          </button>
+          <button className="search-btn" disabled={!hasSearch || isLoading} onClick={handleEnter}>Sök</button>
         </div>
 
-        {/* Filter row */}
         <div className="filter-row">
           <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={inkluderaAvregistrerade}
-              onChange={e => { setInkluderaAvregistrerade(e.target.checked); setFullResults(null); setHits([]); }}
-            />
+            <input type="checkbox" checked={inkluderaAvregistrerade}
+              onChange={e => { setInkluderaAvregistrerade(e.target.checked); setFullResults(null); setHits([]); }} />
             Inkludera avregistrerade bolag
           </label>
           {index && (
             <span className="register-count">
-              {inkluderaAvregistrerade
-                ? `${totalAlla.toLocaleString("sv-SE")} bolag totalt`
-                : `${totalAktiva.toLocaleString("sv-SE")} aktiva bolag`}
+              {inkluderaAvregistrerade ? `${totalAlla.toLocaleString("sv-SE")} bolag totalt` : `${totalAktiva.toLocaleString("sv-SE")} aktiva bolag`}
             </span>
           )}
         </div>
 
         {loadError && <p className="load-error">Kunde inte ladda bolagsregistret: {loadError}</p>}
-
         <p className="search-hint">Tryck Enter eller Sök för alla träffar</p>
 
         {selectedSni && (
           <div className="filter-chips">
             <div className="chip">
-              <span className="chip-kod">{selectedSni.kod}</span>
-              {selectedSni.namn}
+              <span className="chip-kod">{selectedSni.kod}</span>{selectedSni.namn}
               <button onClick={() => { setSelectedSni(null); setFullResults(null); }}>✕</button>
             </div>
           </div>
@@ -395,22 +362,15 @@ export default function App() {
       </main>
 
       <div className="trust-bar">
-        <span className="trust-item"><span className="dot green" />Källa: Bolagsverket &amp; SCB</span>
-        <span className="trust-item"><span className="dot green" />Uppdateras veckovis</span>
+        <span className="trust-item"><span className="dot green" />Källa: Bolagsverket, SCB &amp; ARN</span>
+        <span className="trust-item"><span className="dot green" />Uppdateras löpande</span>
         <span className="trust-item"><span className="dot green" />Öppna offentliga data</span>
       </div>
 
       {selected && (
         <section className="detail-section">
-          {detailLoading && (
-            <div className="loading-card"><div className="spinner" />Hämtar data från Bolagsverket…</div>
-          )}
-          {detailError && (
-            <div className="error-card">
-              <strong>Kunde inte hämta detaljdata</strong>
-              <p>{detailError}</p>
-            </div>
-          )}
+          {detailLoading && <div className="loading-card"><div className="spinner" />Hämtar data från Bolagsverket…</div>}
+          {detailError && <div className="error-card"><strong>Kunde inte hämta detaljdata</strong><p>{detailError}</p></div>}
           {detail && !detailLoading && <DetailCard bolag={selected} data={detail} />}
         </section>
       )}
@@ -418,7 +378,10 @@ export default function App() {
   );
 }
 
+// ── Detail Card ───────────────────────────────────────────────────────────────
 function DetailCard({ bolag, data }) {
+  const [openArende, setOpenArende] = useState(null);
+
   const namn = data?.organisationsnamn?.organisationsnamnLista?.[0]?.namn ?? bolag[1];
   const orgnr = fmtOrgnr(bolag[0]);
   const regdatum = data?.organisationsdatum?.registreringsdatum ?? bolag[3] ?? "—";
@@ -427,14 +390,25 @@ function DetailCard({ bolag, data }) {
   const street = post?.utdelningsadress ?? "—";
   const zip = post?.postnummer ?? "—";
   const sniArr = data?.naringsgrenOrganisation?.sni;
-  const sniText = Array.isArray(sniArr)
-    ? sniArr.map(s => `${s.kod} – ${s.klartext}`).join(", ")
-    : sniArr ?? null;
+  const sniText = Array.isArray(sniArr) ? sniArr.map(s => `${s.kod} – ${s.klartext}`).join(", ") : sniArr ?? null;
   const verksamhet = data?.verksamhetsbeskrivning?.beskrivning ?? null;
   const isActive = data?.verksamOrganisation?.kod === "JA";
   const form = data?.organisationsform?.klartext ?? "Aktiebolag";
   const konkurs = data?.pagaendeAvvecklingsEllerOmstruktureringsforfarande
     ?.pagaendeAvvecklingsEllerOmstruktureringsforfarandeLista?.[0]?.klartext ?? null;
+
+  const arnStats = getArnStats(bolag[0]);
+
+  // Flag colors
+  const flagColor = (val, type) => {
+    if (type === "arenden") return val > 0 ? (val >= 5 ? "flag-red" : "flag-amber") : "flag-green";
+    if (type === "fallen") return val > 0 ? (val >= 3 ? "flag-red" : "flag-amber") : "flag-green";
+    if (type === "foljt") {
+      if (!arnStats || arnStats.fallen === 0) return "flag-green";
+      return val < arnStats.fallen ? "flag-red" : "flag-green";
+    }
+    return "flag-gray";
+  };
 
   return (
     <div className="detail-card">
@@ -461,25 +435,89 @@ function DetailCard({ bolag, data }) {
         {verksamhet && <Cell label="Verksamhet" value={verksamhet} span />}
       </div>
 
+      {/* ARN Section */}
       <div className="arn-section">
         <div className="arn-section-title">ARN-historik</div>
-        <div className="arn-placeholder">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" opacity="0.4"/>
-            <line x1="12" y1="8" x2="12" y2="13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            <circle cx="12" cy="16" r="0.75" fill="currentColor"/>
-          </svg>
-          ARN-data kopplas in i nästa steg — här visas ärenden, fällningar och efterlevnad.
-        </div>
-        <div className="flag-row">
-          <div className="flag gray"><div className="flag-dot" />Ärenden: —</div>
-          <div className="flag gray"><div className="flag-dot" />Fälld: —</div>
-          <div className="flag gray"><div className="flag-dot" />Följt beslut: —</div>
-        </div>
+
+        {arnStats ? (
+          <>
+            <div className="flag-row" style={{ marginBottom: "1rem" }}>
+              <div className={`flag ${flagColor(arnStats.antal, "arenden")}`}>
+                <div className="flag-dot" />
+                {arnStats.antal} ärende{arnStats.antal !== 1 ? "n" : ""}
+              </div>
+              <div className={`flag ${flagColor(arnStats.fallen, "fallen")}`}>
+                <div className="flag-dot" />
+                {arnStats.fallen} fälld{arnStats.fallen !== 1 ? "a" : ""}
+              </div>
+              <div className={`flag ${flagColor(arnStats.foljt, "foljt")}`}>
+                <div className="flag-dot" />
+                {arnStats.fallen > 0
+                  ? `${arnStats.foljt} av ${arnStats.fallen} beslut följda`
+                  : "Inga fällningar"}
+              </div>
+            </div>
+
+            {/* Ärenden list */}
+            <div className="arenden-list">
+              {arnStats.arenden.map(a => (
+                <div key={a.arendenr} className="arende-row">
+                  <div className="arende-header" onClick={() => setOpenArende(openArende === a.arendenr ? null : a.arendenr)}>
+                    <div className="arende-meta">
+                      <span className="arende-nr">{a.arendenr}</span>
+                      <span className="arende-datum">{a.datum_beslut}</span>
+                      <span className="arende-vara">{a.vara_tjanst}</span>
+                    </div>
+                    <div className="arende-badges">
+                      <span className={`arn-outcome outcome-${a.beslutskod === "Bifall" ? "bifall" : a.beslutskod === "Avslag" ? "avslag" : a.beslutskod === "Avvisat" ? "avvisat" : "delvis"}`}>
+                        {a.beslutskod}
+                      </span>
+                      {(a.beslutskod === "Bifall" || a.beslutskod === "Delvis bifall") && (
+                        <span className={`arn-foljt ${a.foljt_beslut ? "foljt-ja" : "foljt-nej"}`}>
+                          {a.foljt_beslut ? "✓ Följt" : "✗ Ej följt"}
+                        </span>
+                      )}
+                      <span className="arende-chevron">{openArende === a.arendenr ? "▲" : "▼"}</span>
+                    </div>
+                  </div>
+
+                  {openArende === a.arendenr && (
+                    <div className="arende-body">
+                      <p className="arende-beskrivning">{a.beskrivning}</p>
+                      {a.belopp_yrkat > 0 && (
+                        <p className="arende-belopp">Yrkat belopp: {a.belopp_yrkat.toLocaleString("sv-SE")} kr</p>
+                      )}
+                      <div className="beslut-text">
+                        <div className="beslut-text-label">Beslut (anonymiserat)</div>
+                        <pre className="beslut-pre">{a.beslut_text}</pre>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="arn-placeholder">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" opacity="0.4"/>
+                <line x1="12" y1="8" x2="12" y2="13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <circle cx="12" cy="16" r="0.75" fill="currentColor"/>
+              </svg>
+              Inga registrerade ARN-ärenden för detta bolag.
+            </div>
+            <div className="flag-row">
+              <div className="flag flag-green"><div className="flag-dot" />Ärenden: 0</div>
+              <div className="flag flag-green"><div className="flag-dot" />Fälld: 0</div>
+              <div className="flag flag-green"><div className="flag-dot" />Inga fällningar</div>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="detail-footer">
-        <span className="footer-note">Data från Bolagsverket &amp; SCB · Värdefulla datamängder v1</span>
+        <span className="footer-note">Data från Bolagsverket, SCB &amp; ARN · Värdefulla datamängder v1</span>
       </div>
     </div>
   );
