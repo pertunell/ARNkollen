@@ -130,8 +130,11 @@ export default function App() {
   const [detailError, setDetailError] = useState(null);
   const inputRef = useRef(null);
 
-  useEffect(() => {
-    const files = Array.from({ length: 9 }, (_, i) => `/bolag_${i}.json`);
+useEffect(() => {
+    const files = [
+      ...Array.from({ length: 9 }, (_, i) => `/bolag_${i}.json`),
+      '/bolag_test.json'
+    ];
     Promise.all(files.map(f => fetch(f).then(r => r.json())))
       .then(chunks => setIndex(chunks.flat()))
       .catch(e => setLoadError(e.message));
