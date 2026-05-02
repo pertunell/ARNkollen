@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ARN_BOLAG, ARN_ARENDEN, getBolagStats, getBolagFlaggor } from "./arnData.js";
+import { ARN_BOLAG, getBolagStats, getBolagFlaggor } from "./arnData.js";
 
 const BV_TOKEN_URL = "/api/token";
 const BV_API_URL = "/api/bolag/";
@@ -71,38 +71,43 @@ function searchIndex(index, q, cityQ, sniKod, inkluderaAvregistrerade) {
   const cl = cityQ.toLowerCase().trim();
   const exact = [], starts = [], wordStarts = [], contains = [];
   let containsCount = 0;
-
   for (let i = 0; i < index.length; i++) {
     const row = index[i];
     const n = row[1].toLowerCase();
     const c = (row[2] ?? "").toLowerCase();
     const sni = row[4] ?? "";
     const aktiv = row[5] ?? 1;
-
     if (!inkluderaAvregistrerade && aktiv === 0) continue;
     if (cl && !c.includes(cl)) continue;
     if (sniKod && !sni.startsWith(sniKod)) continue;
-
     if (!ql) { contains.push(row); if (++containsCount >= 500) break; continue; }
     if (n === ql) exact.push(row);
     else if (n.startsWith(ql)) starts.push(row);
     else if (n.split(/\s+/).some(w => w.startsWith(ql))) wordStarts.push(row);
     else if (n.includes(ql)) { contains.push(row); if (++containsCount >= 500) break; }
   }
-
   const sortByName = (a, b) => a[1].localeCompare(b[1], "sv");
-  return [
-    ...exact.sort(sortByName),
-    ...starts.sort(sortByName),
-    ...wordStarts.sort(sortByName),
-    ...contains.sort(sortByName),
-  ];
+  return [...exact.sort(sortByName), ...starts.sort(sortByName), ...wordStarts.sort(sortByName), ...contains.sort(sortByName)];
 }
 
-// ── ARN helpers ──────────────────────────────────────────────────────────────
-function arnOrgnrKey(orgnr) {
-  return orgnr.replace(/\D/g, "");
+function arnScore(row) {
+  const f = row[6];
+  if (!f) return -1;
+  return (f.f1 === "rod" ? 2 : 0) + (f.f2 === "rod" ? 2 : 0) + (f.f3 === "rod" ? 4 : 0);
 }
+
+function sorteraResultat(results, sort) {
+  if (sort === "relevans") return results;
+  return [...results].sort((a, b) => {
+    const sa = arnScore(a), sb = arnScore(b);
+    if (sa === -1 && sb === -1) return 0;
+    if (sa === -1) return sort === "samst" ? 1 : -1;
+    if (sb === -1) return sort === "samst" ? -1 : 1;
+    return sort === "samst" ? sb - sa : sa - sb;
+  });
+}
+
+function arnOrgnrKey(orgnr) { return orgnr.replace(/\D/g, ""); }
 
 function getArnStats(orgnr) {
   const key = arnOrgnrKey(orgnr);
@@ -111,14 +116,6 @@ function getArnStats(orgnr) {
   return getBolagStats(arnKey);
 }
 
-function getArnFlaggor(orgnr) {
-  const key = arnOrgnrKey(orgnr);
-  const arnKey = Object.keys(ARN_BOLAG).find(k => arnOrgnrKey(k) === key);
-  if (!arnKey) return null;
-  return getBolagFlaggor(arnKey);
-}
-
-// ── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
   const [index, setIndex] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -128,7 +125,7 @@ export default function App() {
   const [selectedSni, setSelectedSni] = useState(null);
   const [sniDropdown, setSniDropdown] = useState(false);
   const [inkluderaAvregistrerade, setInkluderaAvregistrerade] = useState(false);
-  const [sortering, setSortering] = useState("relevans"); // relevans | samst | bast
+  const [sortering, setSortering] = useState("relevans");
   const [hits, setHits] = useState([]);
   const [fullResults, setFullResults] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -138,7 +135,10 @@ export default function App() {
   const inputRef = useRef(null);
 
   useEffect(() => {
-    const files = Array.from({ length: 9 }, (_, i) => `/bolag_${i}.json`);
+    const files = [
+      ...Array.from({ length: 9 }, (_, i) => `/bolag_${i}.json`),
+      "/bolag_test.json",
+    ];
     Promise.all(files.map(f => fetch(f).then(r => r.json())))
       .then(chunks => setIndex(chunks.flat()))
       .catch(e => setLoadError(e.message));
@@ -148,8 +148,7 @@ export default function App() {
   const totalAlla = index ? index.length : 0;
 
   const sniSuggestions = sniQuery.length > 0
-    ? SNI_LIST.filter(([kod, namn]) =>
-        namn.toLowerCase().includes(sniQuery.toLowerCase()) || kod.startsWith(sniQuery))
+    ? SNI_LIST.filter(([kod, namn]) => namn.toLowerCase().includes(sniQuery.toLowerCase()) || kod.startsWith(sniQuery))
     : SNI_LIST;
 
   useEffect(() => {
@@ -164,21 +163,7 @@ export default function App() {
     const res = searchIndex(index, query, cityQuery, selectedSni?.kod ?? "", inkluderaAvregistrerade);
     setFullResults(sorteraResultat(res, sortering));
     setHits([]);
-  }, [index, query, cityQuery, selectedSni, inkluderaAvregistrerade]);
-
-  const sorteraResultat = useCallback((results, sort) => {
-    if (sort === "relevans") return results;
-    return [...results].sort((a, b) => {
-      const fa = a[6];
-      const fb = b[6];
-      if (!fa && !fb) return 0;
-      if (!fa) return sort === "samst" ? 1 : -1;
-      if (!fb) return sort === "samst" ? -1 : 1;
-      // Score: rod=2, gron=0 per flagga
-      const score = (f) => (f.f1==="rod"?2:0) + (f.f2==="rod"?2:0) + (f.f3==="rod"?4:0);
-      return sort === "samst" ? score(fb) - score(fa) : score(fa) - score(fb);
-    });
-  }, []);
+  }, [index, query, cityQuery, selectedSni, inkluderaAvregistrerade, sortering]);
 
   const handleEnter = useCallback(() => {
     if (!index) return;
@@ -335,7 +320,7 @@ export default function App() {
             {hits.map(row => (
               <div key={row[0]} className="dropdown-item" onClick={() => selectBolag(row)}>
                 <div className="avatar">{initials(row[1])}</div>
-                <div style={{flex:1,minWidth:0}}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="item-name">{row[1]}</div>
                   <div className="item-meta">
                     {fmtOrgnr(row[0])} · {row[2]}
@@ -358,12 +343,12 @@ export default function App() {
                 {cityQuery ? ` i ${cityQuery}` : ""}
                 {inkluderaAvregistrerade ? " · inkl. avregistrerade" : ""}
               </span>
-              <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
-                <span style={{fontSize:"11px",color:"#aaa"}}>Sortera:</span>
-                {["relevans","samst","bast"].map(s => (
-                  <button key={s} className={`sort-btn ${sortering===s?"sort-btn-active":""}`}
-                    onClick={() => { setSortering(s); setFullResults(sorteraResultat(fullResults, s)); }}>
-                    {s==="relevans"?"Relevans":s==="samst"?"Sämst ARN":"Bäst ARN"}
+              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                <span style={{ fontSize: "11px", color: "#aaa" }}>Sortera:</span>
+                {["relevans", "samst", "bast"].map(s => (
+                  <button key={s} className={`sort-btn ${sortering === s ? "sort-btn-active" : ""}`}
+                    onClick={() => { setSortering(s); setFullResults(prev => sorteraResultat(prev, s)); }}>
+                    {s === "relevans" ? "Relevans" : s === "samst" ? "Sämst ARN" : "Bäst ARN"}
                   </button>
                 ))}
                 <button className="close-btn" onClick={() => setFullResults(null)}>✕</button>
@@ -373,7 +358,7 @@ export default function App() {
               {fullResults.slice(0, 200).map(row => (
                 <div key={row[0]} className="dropdown-item" onClick={() => selectBolag(row)}>
                   <div className="avatar" style={{ opacity: row[5] === 0 ? 0.5 : 1 }}>{initials(row[1])}</div>
-                  <div style={{flex:1,minWidth:0}}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="item-name" style={{ color: row[5] === 0 ? "#888" : undefined }}>{row[1]}</div>
                     <div className="item-meta">
                       {fmtOrgnr(row[0])} · {row[2]}
@@ -411,15 +396,14 @@ export default function App() {
   );
 }
 
-// ── ARN Prickar — visas i sökresultatlistan ──────────────────────────────────
 function ArnPrickar({ flaggor }) {
   const prickar = [
-    { f: flaggor.f1, k: flaggor.k1, label: "Ärenden" },
-    { f: flaggor.f2, k: flaggor.k2, label: "Fälld" },
-    { f: flaggor.f3, k: flaggor.k3, label: "Följt" },
+    { f: flaggor.f1, k: flaggor.k1, label: "Ärenden hos ARN" },
+    { f: flaggor.f2, k: flaggor.k2, label: "Fälld av ARN" },
+    { f: flaggor.f3, k: flaggor.k3, label: "Följt ARN:s beslut" },
   ];
   return (
-    <div className="arn-prickar" title={prickar.map(p => `${p.label}: ${p.k}`).join("\n")}>
+    <div className="arn-prickar">
       {prickar.map((p, i) => (
         <div key={i} className={`arn-prick arn-prick-${p.f}`}>
           <div className="arn-prick-tooltip">
@@ -432,10 +416,8 @@ function ArnPrickar({ flaggor }) {
   );
 }
 
-// ── Detail Card ───────────────────────────────────────────────────────────────
 function DetailCard({ bolag, data }) {
   const [openArende, setOpenArende] = useState(null);
-
   const namn = data?.organisationsnamn?.organisationsnamnLista?.[0]?.namn ?? bolag[1];
   const orgnr = fmtOrgnr(bolag[0]);
   const regdatum = data?.organisationsdatum?.registreringsdatum ?? bolag[3] ?? "—";
@@ -450,7 +432,6 @@ function DetailCard({ bolag, data }) {
   const form = data?.organisationsform?.klartext ?? "Aktiebolag";
   const konkurs = data?.pagaendeAvvecklingsEllerOmstruktureringsforfarande
     ?.pagaendeAvvecklingsEllerOmstruktureringsforfarandeLista?.[0]?.klartext ?? null;
-
   const arnStats = getArnStats(bolag[0]);
 
   return (
@@ -462,9 +443,7 @@ function DetailCard({ bolag, data }) {
           <code className="detail-orgnr">{orgnr}</code>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-end", flexShrink: 0 }}>
-          <span className={`status-badge ${isActive ? "active" : "inactive"}`}>
-            {isActive ? "Aktiv" : "Avregistrerad"}
-          </span>
+          <span className={`status-badge ${isActive ? "active" : "inactive"}`}>{isActive ? "Aktiv" : "Avregistrerad"}</span>
           {konkurs && <span className="status-badge inactive">{konkurs}</span>}
         </div>
       </div>
@@ -478,28 +457,26 @@ function DetailCard({ bolag, data }) {
         {verksamhet && <Cell label="Verksamhet" value={verksamhet} span />}
       </div>
 
-      {/* ARN Section */}
       <div className="arn-section">
         <div className="arn-section-title">ARN-historik</div>
-
         {arnStats ? (
           <>
             <div className="flag-row" style={{ marginBottom: "1rem" }}>
-              <div className={`flag flag-${arnStats.flaggArenden}`} title={arnStats.kontextArenden}>
+              <div className={`flag flag-${arnStats.flaggArenden}`}>
                 <div className="flag-dot" />
                 <div>
                   <div className="flag-label">Ärenden hos ARN</div>
                   <div className="flag-context">{arnStats.kontextArenden}</div>
                 </div>
               </div>
-              <div className={`flag flag-${arnStats.flaggFalld}`} title={arnStats.kontextFalld}>
+              <div className={`flag flag-${arnStats.flaggFalld}`}>
                 <div className="flag-dot" />
                 <div>
                   <div className="flag-label">Fälld av ARN</div>
                   <div className="flag-context">{arnStats.kontextFalld}</div>
                 </div>
               </div>
-              <div className={`flag flag-${arnStats.flaggFoljt}`} title={arnStats.kontextFoljt}>
+              <div className={`flag flag-${arnStats.flaggFoljt}`}>
                 <div className="flag-dot" />
                 <div>
                   <div className="flag-label">Följt ARN:s beslut</div>
@@ -507,8 +484,6 @@ function DetailCard({ bolag, data }) {
                 </div>
               </div>
             </div>
-
-            {/* Ärenden list */}
             <div className="arenden-list">
               {arnStats.arenden.map(a => (
                 <div key={a.arendenr} className="arende-row">
@@ -519,24 +494,17 @@ function DetailCard({ bolag, data }) {
                       <span className="arende-vara">{a.vara_tjanst}</span>
                     </div>
                     <div className="arende-badges">
-                      <span className={`arn-outcome outcome-${a.beslutskod === "Bifall" ? "bifall" : a.beslutskod === "Avslag" ? "avslag" : a.beslutskod === "Avvisat" ? "avvisat" : "delvis"}`}>
-                        {a.beslutskod}
-                      </span>
+                      <span className={`arn-outcome outcome-${a.beslutskod === "Bifall" ? "bifall" : a.beslutskod === "Avslag" ? "avslag" : a.beslutskod === "Avvisat" ? "avvisat" : "delvis"}`}>{a.beslutskod}</span>
                       {(a.beslutskod === "Bifall" || a.beslutskod === "Delvis bifall") && (
-                        <span className={`arn-foljt ${a.foljt_beslut ? "foljt-ja" : "foljt-nej"}`}>
-                          {a.foljt_beslut ? "✓ Följt" : "✗ Ej följt"}
-                        </span>
+                        <span className={`arn-foljt ${a.foljt_beslut ? "foljt-ja" : "foljt-nej"}`}>{a.foljt_beslut ? "✓ Följt" : "✗ Ej följt"}</span>
                       )}
                       <span className="arende-chevron">{openArende === a.arendenr ? "▲" : "▼"}</span>
                     </div>
                   </div>
-
                   {openArende === a.arendenr && (
                     <div className="arende-body">
                       <p className="arende-beskrivning">{a.beskrivning}</p>
-                      {a.belopp_yrkat > 0 && (
-                        <p className="arende-belopp">Yrkat belopp: {a.belopp_yrkat.toLocaleString("sv-SE")} kr</p>
-                      )}
+                      {a.belopp_yrkat > 0 && <p className="arende-belopp">Yrkat belopp: {a.belopp_yrkat.toLocaleString("sv-SE")} kr</p>}
                       <div className="beslut-text">
                         <div className="beslut-text-label">Beslut (anonymiserat)</div>
                         <pre className="beslut-pre">{a.beslut_text}</pre>
