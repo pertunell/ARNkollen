@@ -56,7 +56,7 @@ export const ARN_BOLAG = {
   },
 
   // ── SPORT & FRITID ──────────────────────────────────────────────────────
-  "5598765432": {
+  "5590089784": {
     namn: "Långholmen Kajak & Vattensport AB",
     orgnr: "559876-5432",
     bransch: "Detaljhandel med fritids- och sportartiklar",
@@ -423,7 +423,7 @@ Nämnden avslår anmälarens krav. Konsumenten saknade avbeställningsskydd och 
   // ════════════════════════════════════════════════
   {
     arendenr: "2024-09123",
-    orgnr: "5598765432",
+    orgnr: "5590089784",
     datum_anmalan: "2024-05-02",
     datum_beslut: "2024-09-11",
     vara_tjanst: "2-pack uppblåsbar SUP",
@@ -456,7 +456,7 @@ Nämnden finner att bolaget inte styrkt att felet orsakats av konsumenten. Presu
   },
   {
     arendenr: "2024-12876",
-    orgnr: "5598765432",
+    orgnr: "5590089784",
     datum_anmalan: "2024-06-18",
     datum_beslut: "2024-10-30",
     vara_tjanst: "2-pack uppblåsbar SUP",
@@ -482,7 +482,7 @@ Bolagets villkor om 48-timmars reklamationstid strider mot konsumentköplagen oc
   },
   {
     arendenr: "2024-16234",
-    orgnr: "5598765432",
+    orgnr: "5590089784",
     datum_anmalan: "2024-08-14",
     datum_beslut: "2024-12-05",
     vara_tjanst: "2-pack uppblåsbar SUP",
@@ -508,7 +508,7 @@ Detta är det tredje ärendet nämnden behandlar avseende samma produktserie (2-
   },
   {
     arendenr: "2023-19234",
-    orgnr: "5598765432",
+    orgnr: "5590089784",
     datum_anmalan: "2023-10-05",
     datum_beslut: "2024-02-14",
     vara_tjanst: "Kajak",
@@ -534,7 +534,7 @@ Sprickan i skrovet är ett fel som bolaget ansvarar för oavsett när det uppsto
   },
   {
     arendenr: "2024-03456",
-    orgnr: "5598765432",
+    orgnr: "5590089784",
     datum_anmalan: "2024-02-01",
     datum_beslut: "2024-06-20",
     vara_tjanst: "Paddlar",
@@ -551,7 +551,7 @@ Nämnden avslår anmälarens krav. Konsumenten har testat paddlarna och ångerr�
   },
   {
     arendenr: "2023-11876",
-    orgnr: "5598765432",
+    orgnr: "5590089784",
     datum_anmalan: "2023-06-12",
     datum_beslut: "2023-10-28",
     vara_tjanst: "Uppblåsbar SUP",
@@ -577,7 +577,7 @@ En SUP-bräda som spricker vid uppblåsning till rekommenderat tryck är behäft
   },
   {
     arendenr: "2024-19876",
-    orgnr: "5598765432",
+    orgnr: "5590089784",
     datum_anmalan: "2024-10-03",
     datum_beslut: "2025-02-18",
     vara_tjanst: "2-pack uppblåsbar SUP",
